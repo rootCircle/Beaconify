@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.iiitl.locateme.services.BeaconTransmitterService
+import com.iiitl.locateme.utils.DeviceUuidManager
 import com.iiitl.locateme.utils.PermissionsManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +26,7 @@ data class RegisterBeaconUiState(
     val hasPermissions: Boolean = false,
     val permissionsDenied: Boolean = false,
     val isTransmitting: Boolean = false,
-    val uuid: String = UUID.randomUUID().toString(),
+    val uuid: String = "",  // Will be initialized with device UUID
     val major: String = "1",
     val minor: String = "1",
     val latitude: String = "",
@@ -36,7 +37,12 @@ data class RegisterBeaconUiState(
 )
 
 class RegisterBeaconViewModel(application: Application) : AndroidViewModel(application) {
-    private val _uiState = MutableStateFlow(RegisterBeaconUiState())
+    private val deviceUuidManager = DeviceUuidManager(application)
+    private val _uiState = MutableStateFlow(
+        RegisterBeaconUiState(
+            uuid = deviceUuidManager.getDeviceUuid()
+        )
+    )
     val uiState: StateFlow<RegisterBeaconUiState> = _uiState.asStateFlow()
 
     private var permissionsManager: PermissionsManager? = null
