@@ -1,3 +1,4 @@
+// utils/PermissionsManager.kt
 package com.iiitl.locateme.utils
 
 import android.Manifest
@@ -12,37 +13,39 @@ class PermissionsManager(
     private val onPermissionsGranted: () -> Unit,
     private val onPermissionsDenied: () -> Unit
 ) {
-    private val requiredPermissions = mutableListOf(
-        Manifest.permission.ACCESS_FINE_LOCATION
-    ).apply {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            add(Manifest.permission.BLUETOOTH_SCAN)
-            add(Manifest.permission.BLUETOOTH_CONNECT)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-        }
-    }
-
-    fun checkAndRequestPermissions() {
-        permissionLauncher.launch(requiredPermissions.toTypedArray())
-    }
-
     companion object {
-        fun hasPermissions(context: Context): Boolean {
-            val requiredPermissions = mutableListOf(
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ).apply {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    add(Manifest.permission.BLUETOOTH_SCAN)
-                    add(Manifest.permission.BLUETOOTH_CONNECT)
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                }
+        fun getRequiredPermissions(): Array<String> {
+            val permissions = mutableListOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                permissions.addAll(
+                    listOf(
+                        Manifest.permission.BLUETOOTH_SCAN,
+                        Manifest.permission.BLUETOOTH_CONNECT,
+                        Manifest.permission.BLUETOOTH_ADVERTISE
+                    )
+                )
+            } else {
+                permissions.addAll(
+                    listOf(
+                        Manifest.permission.BLUETOOTH,
+                        Manifest.permission.BLUETOOTH_ADMIN
+                    )
+                )
             }
 
-            return requiredPermissions.all { permission ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                permissions.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }
+
+            return permissions.toTypedArray()
+        }
+
+        fun hasPermissions(context: Context): Boolean {
+            return getRequiredPermissions().all { permission ->
                 ContextCompat.checkSelfPermission(
                     context,
                     permission
@@ -50,5 +53,8 @@ class PermissionsManager(
             }
         }
     }
-}
 
+    fun checkAndRequestPermissions() {
+        permissionLauncher.launch(getRequiredPermissions())
+    }
+}

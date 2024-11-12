@@ -1,6 +1,8 @@
+// viewmodels/LocateMeViewModel.kt
 package com.iiitl.locateme.viewmodels
 
 import android.app.Application
+import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,12 +16,12 @@ import kotlinx.coroutines.launch
 data class LocateMeUiState(
     val hasPermissions: Boolean = false,
     val permissionsDenied: Boolean = false,
-    val isScanning: Boolean = false
+    val isScanning: Boolean = false,
+    val error: String? = null
 )
 
-class LocateMeViewModel(
-    application: Application
-) : AndroidViewModel(application) {
+class LocateMeViewModel(application: Application) : AndroidViewModel(application) {
+    private val TAG = "LocateMeViewModel"
     private val _uiState = MutableStateFlow(LocateMeUiState())
     val uiState: StateFlow<LocateMeUiState> = _uiState.asStateFlow()
 
@@ -28,40 +30,54 @@ class LocateMeViewModel(
     fun setPermissionLauncher(launcher: ActivityResultLauncher<Array<String>>) {
         permissionsManager = PermissionsManager(
             permissionLauncher = launcher,
-            onPermissionsGranted = { onPermissionsGranted() },
-            onPermissionsDenied = { onPermissionsDenied() }
+            onPermissionsGranted = { handlePermissionsGranted() },
+            onPermissionsDenied = { handlePermissionsDenied() }
         )
-        checkPermissions()
+        checkInitialPermissions()
     }
 
-    private fun checkPermissions() {
-        viewModelScope.launch {
-            val hasPermissions = PermissionsManager.hasPermissions(getApplication())
-            _uiState.update { it.copy(hasPermissions = hasPermissions) }
-        }
+    private fun checkInitialPermissions() {
+        _uiState.update { it.copy(
+            hasPermissions = PermissionsManager.hasPermissions(getApplication())
+        )}
     }
 
     fun requestPermissions() {
+        Log.d(TAG, "Requesting permissions")
         permissionsManager?.checkAndRequestPermissions()
     }
 
-    fun onPermissionsGranted() {
+    fun handlePermissionsGranted() {
+        Log.d(TAG, "Permissions granted")
         _uiState.update { it.copy(
             hasPermissions = true,
-            permissionsDenied = false
+            permissionsDenied = false,
+            error = null
         )}
-        startScanning()
     }
 
-    fun onPermissionsDenied() {
+    fun handlePermissionsDenied() {
+        Log.d(TAG, "Permissions denied")
         _uiState.update { it.copy(
             hasPermissions = false,
-            permissionsDenied = true
+            permissionsDenied = true,
+            error = "Permissions required for beacon scanning"
         )}
     }
 
-    private fun startScanning() {
-        _uiState.update { it.copy(isScanning = true) }
-        // Implement beacon scanning here
+    // Placeholder functions for scanning implementation
+    fun startScanning() {
+        _uiState.update { it.copy(isScanning = true, error = null) }
+        // Implement actual scanning logic here
+    }
+
+    fun stopScanning() {
+        _uiState.update { it.copy(isScanning = false) }
+        // Implement scan stop logic here
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopScanning()
     }
 }

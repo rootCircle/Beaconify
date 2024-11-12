@@ -1,58 +1,62 @@
+// MainActivity.kt
 package com.iiitl.locateme
 
-// MainActivity.kt
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.iiitl.locateme.screens.HomeScreen
-import com.iiitl.locateme.screens.LocateMeScreen
-import com.iiitl.locateme.screens.RegisterBeaconScreen
-import com.iiitl.locateme.viewmodels.LocateMeViewModel
-import com.iiitl.locateme.viewmodels.RegisterBeaconViewModel
+import com.iiitl.locateme.screens.*
+import com.iiitl.locateme.utils.PermissionsManager
+import com.iiitl.locateme.viewmodels.*
+
+sealed class Screen(val route: String) {
+    object Home : Screen("home")
+    object Locate : Screen("locate")
+    object Register : Screen("register")
+}
 
 class MainActivity : ComponentActivity() {
     private lateinit var permissionLauncher: ActivityResultLauncher<Array<String>>
-    private lateinit var locateViewModel: LocateMeViewModel
+    private lateinit var locateMeViewModel: LocateMeViewModel
     private lateinit var registerViewModel: RegisterBeaconViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize ViewModels
-        locateViewModel = LocateMeViewModel(application)
-        registerViewModel = RegisterBeaconViewModel(application)
-
-        // Setup permission launcher before setting content
+        // Initialize permission launcher
         permissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) { permissions ->
             val allGranted = permissions.all { it.value }
             if (allGranted) {
-                locateViewModel.onPermissionsGranted()
-                registerViewModel.onPermissionsGranted()
+                locateMeViewModel.handlePermissionsGranted()
+                registerViewModel.handlePermissionsGranted()
             } else {
-                locateViewModel.onPermissionsDenied()
-                registerViewModel.onPermissionsDenied()
+                locateMeViewModel.handlePermissionsDenied()
+                registerViewModel.handlePermissionsDenied()
             }
         }
 
-        // Pass the launcher to ViewModels
-        locateViewModel.setPermissionLauncher(permissionLauncher)
+        // Initialize ViewModels
+        locateMeViewModel = ViewModelProvider(this)[LocateMeViewModel::class.java]
+        registerViewModel = ViewModelProvider(this)[RegisterBeaconViewModel::class.java]
+
+        // Set permission launchers
+        locateMeViewModel.setPermissionLauncher(permissionLauncher)
         registerViewModel.setPermissionLauncher(permissionLauncher)
 
         setContent {
             MaterialTheme {
                 BeaconifyApp(
-                    locateViewModel = locateViewModel,
+                    locateViewModel = locateMeViewModel,
                     registerViewModel = registerViewModel
                 )
             }
@@ -67,14 +71,17 @@ fun BeaconifyApp(
 ) {
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = "home") {
-        composable("home") {
+    NavHost(
+        navController = navController,
+        startDestination = Screen.Home.route
+    ) {
+        composable(Screen.Home.route) {
             HomeScreen(navController = navController)
         }
-        composable("locate") {
+        composable(Screen.Locate.route) {
             LocateMeScreen(viewModel = locateViewModel)
         }
-        composable("register") {
+        composable(Screen.Register.route) {
             RegisterBeaconScreen(viewModel = registerViewModel)
         }
     }
