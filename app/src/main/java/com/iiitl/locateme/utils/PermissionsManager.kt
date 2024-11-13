@@ -15,7 +15,7 @@ class PermissionsManager(
     private val onPermissionsDenied: () -> Unit
 ) {
     companion object {
-        private val TAG = "PermissionsManager"
+        private const val TAG = "PermissionsManager"
 
         fun getRequiredPermissions(): Array<String> {
             val permissions = mutableListOf<String>()
@@ -23,6 +23,11 @@ class PermissionsManager(
             // Location permissions
             permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
             permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+
+            // Add Android 13+ (TIRAMISU) permissions
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
 
             // Add Android 12+ (S) permissions
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -39,6 +44,7 @@ class PermissionsManager(
 
             // Note: Background location is handled separately
 
+            Log.d(TAG, "Required permissions for SDK ${Build.VERSION.SDK_INT}: $permissions")
             return permissions.toTypedArray()
         }
 
@@ -55,6 +61,16 @@ class PermissionsManager(
                 if (ContextCompat.checkSelfPermission(
                         context,
                         Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                    ) != PermissionChecker.PERMISSION_GRANTED) {
+                    return false
+                }
+            }
+
+            // Check notification permission for Android 13+ (TIRAMISU)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.POST_NOTIFICATIONS
                     ) != PermissionChecker.PERMISSION_GRANTED) {
                     return false
                 }

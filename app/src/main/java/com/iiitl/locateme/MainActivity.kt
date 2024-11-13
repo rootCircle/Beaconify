@@ -34,6 +34,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var registerViewModel: RegisterBeaconViewModel
 
     private var showBackgroundPermissionDialog by mutableStateOf(false)
+    private var showNotificationPermissionDialog by mutableStateOf(false)
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,7 +48,14 @@ class MainActivity : ComponentActivity() {
 
             val allGranted = permissions.all { it.value }
             if (allGranted) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    // Check notification permission
+                    if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
+                        showNotificationPermissionDialog = true
+                    } else {
+                        requestNotificationPermission()
+                    }
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     requestBackgroundLocation()
                 } else {
                     handlePermissionsGranted()
@@ -87,8 +96,92 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
+
+                    if (showNotificationPermissionDialog) {
+                        NotificationPermissionDialog(
+                            onConfirm = {
+                                showNotificationPermissionDialog = false
+                                requestNotificationPermission()
+                            },
+                            onDismiss = {
+                                showNotificationPermissionDialog = false
+                                // Even if notification permission is denied, we can continue with location
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    requestBackgroundLocation()
+                                } else {
+                                    handlePermissionsGranted()
+                                }
+                            }
+                        )
+                    }
                 }
             }
+        }
+
+    }
+
+    @Composable
+    private fun NotificationPermissionDialog(
+        onConfirm: () -> Unit,
+        onDismiss: () -> Unit
+    ) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Notification Permission") },
+            text = {
+                Text("Beaconify needs notification permission to show when a virtual beacon is active. " +
+                        "This helps you know when your beacon is transmitting.")
+            },
+            confirmButton = {
+                TextButton(onClick = onConfirm) {
+                    Text("Allow")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Skip")
+                }
+            }
+        )
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                NOTIFICATION_PERMISSION_CODE
+            )
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        when (requestCode) {
+            BACKGROUND_LOCATION_PERMISSION_CODE -> {
+                handleBackgroundLocationPermissionResult(grantResults)
+            }
+            NOTIFICATION_PERMISSION_CODE -> {
+                // Proceed with location permissions regardless of notification permission result
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    requestBackgroundLocation()
+                } else {
+                    handlePermissionsGranted()
+                }
+            }
+        }
+    }
+
+    private fun handleBackgroundLocationPermissionResult(grantResults: IntArray) {
+        if (grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            handlePermissionsGranted()
+        } else {
+            handlePermissionsDenied()
         }
     }
 
@@ -141,24 +234,6 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        when (requestCode) {
-            BACKGROUND_LOCATION_PERMISSION_CODE -> {
-                if (grantResults.isNotEmpty() &&
-                    grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    handlePermissionsGranted()
-                } else {
-                    handlePermissionsDenied()
-                }
-            }
-        }
-    }
-
     private fun handlePermissionsGranted() {
         homeViewModel.handlePermissionsGranted()
         locateMeViewModel.handlePermissionsGranted()
@@ -173,6 +248,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val BACKGROUND_LOCATION_PERMISSION_CODE = 2
+        private const val NOTIFICATION_PERMISSION_CODE = 3
     }
 }
 
