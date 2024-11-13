@@ -20,6 +20,7 @@ class BeaconTransmitterService : Service() {
         private const val NOTIFICATION_ID = 123
         private const val CHANNEL_ID = "BeaconTransmitterChannel"
         private const val TAG = "BeaconTransmitterService"
+        const val ACTION_SHOW_REGISTER_SCREEN = "com.iiitl.locateme.SHOW_REGISTER_SCREEN"
     }
 
     private var beaconTransmitter: BeaconTransmitter? = null
@@ -71,55 +72,7 @@ class BeaconTransmitterService : Service() {
         // Get beacon data from intent
         intent?.let { startIntent ->
             try {
-                val uuid = startIntent.getStringExtra("uuid") ?: throw IllegalArgumentException("UUID is required")
-                val major = startIntent.getStringExtra("major") ?: throw IllegalArgumentException("Major is required")
-                val minor = startIntent.getStringExtra("minor") ?: throw IllegalArgumentException("Minor is required")
-                val latitude = startIntent.getDoubleExtra("latitude", 0.0)
-                val longitude = startIntent.getDoubleExtra("longitude", 0.0)
-
-                // Check transmission support
-                val transmissionSupport = BeaconTransmitter.checkTransmissionSupported(this)
-                if (transmissionSupport != BeaconTransmitter.SUPPORTED) {
-                    throw IllegalStateException("Beacon transmission not supported: $transmissionSupport")
-                }
-
-                // Create beacon
-                val beacon = Beacon.Builder()
-                    .setId1(uuid)
-                    .setId2(major)
-                    .setId3(minor)
-                    .setManufacturer(0x0118)
-                    .setTxPower(-59)
-                    .setDataFields(listOf(
-                        latitude.toBits(),
-                        longitude.toBits()
-                    ))
-                    .build()
-
-                // Create beacon parser
-                val beaconParser = BeaconParser()
-                    .setBeaconLayout("m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25")
-
-                // Initialize transmitter
-                beaconTransmitter = BeaconTransmitter(applicationContext, beaconParser)
-
-                // Start advertising
-                beaconTransmitter?.let { transmitter ->
-                    try {
-                        if (!transmitter.isStarted) {
-                            Log.d(TAG, "Starting beacon transmission with UUID: $uuid")
-                            transmitter.startAdvertising(beacon)
-                            Log.d(TAG, "Beacon transmission started successfully")
-                            broadcastStatus("SUCCESS")
-                        } else {
-                            Log.w(TAG, "Beacon transmission already active")
-                        }
-                    } catch (e: SecurityException) {
-                        Log.e(TAG, "Security exception during advertising: ${e.message}")
-                        broadcastStatus("ERROR", "Permission denied: ${e.message}")
-                        stopSelf()
-                    }
-                }
+                startBeaconTransmission(startIntent)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting beacon transmission: ${e.message}")
@@ -129,6 +82,63 @@ class BeaconTransmitterService : Service() {
         }
 
         return START_NOT_STICKY
+    }
+
+    private fun startBeaconTransmission(startIntent: Intent) {
+        val uuid =
+            startIntent.getStringExtra("uuid") ?: throw IllegalArgumentException("UUID is required")
+        val major = startIntent.getStringExtra("major")
+            ?: throw IllegalArgumentException("Major is required")
+        val minor = startIntent.getStringExtra("minor")
+            ?: throw IllegalArgumentException("Minor is required")
+        val latitude = startIntent.getDoubleExtra("latitude", 0.0)
+        val longitude = startIntent.getDoubleExtra("longitude", 0.0)
+
+        // Check transmission support
+        val transmissionSupport = BeaconTransmitter.checkTransmissionSupported(this)
+        if (transmissionSupport != BeaconTransmitter.SUPPORTED) {
+            throw IllegalStateException("Beacon transmission not supported: $transmissionSupport")
+        }
+
+        // Create beacon
+        val beacon = Beacon.Builder()
+            .setId1(uuid)
+            .setId2(major)
+            .setId3(minor)
+            .setManufacturer(0x0118)
+            .setTxPower(-59)
+            .setDataFields(
+                listOf(
+                    latitude.toBits(),
+                    longitude.toBits()
+                )
+            )
+            .build()
+
+        // Create beacon parser
+        val beaconParser = BeaconParser()
+            .setBeaconLayout("m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25")
+
+        // Initialize transmitter
+        beaconTransmitter = BeaconTransmitter(applicationContext, beaconParser)
+
+        // Start advertising
+        beaconTransmitter?.let { transmitter ->
+            try {
+                if (!transmitter.isStarted) {
+                    Log.d(TAG, "Starting beacon transmission with UUID: $uuid")
+                    transmitter.startAdvertising(beacon)
+                    Log.d(TAG, "Beacon transmission started successfully")
+                    broadcastStatus("SUCCESS")
+                } else {
+                    Log.w(TAG, "Beacon transmission already active")
+                }
+            } catch (e: SecurityException) {
+                Log.e(TAG, "Security exception during advertising: ${e.message}")
+                broadcastStatus("ERROR", "Permission denied: ${e.message}")
+                stopSelf()
+            }
+        }
     }
 
     private fun broadcastStatus(status: String, message: String = "") {
@@ -156,23 +166,40 @@ class BeaconTransmitterService : Service() {
     }
 
     private fun createNotification(): Notification {
-        val notificationIntent = Intent(this, MainActivity::class.java)
+        // Create notification channel
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Beacon Service",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Virtual Beacon Transmission Service"
+            }
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        // Create pending intent for notification click
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            action = ACTION_SHOW_REGISTER_SCREEN
+        }
         val pendingIntent = PendingIntent.getActivity(
             this,
             0,
-            notificationIntent,
-            PendingIntent.FLAG_IMMUTABLE
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Beacon Active")
-            .setContentText("Virtual beacon is transmitting")
+            .setContentTitle("Virtual Beacon Active")
+            .setContentText("Beacon is transmitting")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentIntent(pendingIntent)
-            .setSilent(true)
             .setOngoing(true)
+            .setContentIntent(pendingIntent)
             .build()
     }
+
 
     override fun onCreate() {
         super.onCreate()
@@ -202,4 +229,7 @@ class BeaconTransmitterService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+
+
 }

@@ -12,6 +12,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.iiitl.locateme.services.BeaconTransmitterService
+import com.iiitl.locateme.utils.BeaconPreferences
+import com.iiitl.locateme.utils.BeaconState
 import com.iiitl.locateme.utils.DeviceUuidManager
 import com.iiitl.locateme.utils.PermissionsManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +40,7 @@ data class RegisterBeaconUiState(
 
 class RegisterBeaconViewModel(application: Application) : AndroidViewModel(application) {
     private val deviceUuidManager = DeviceUuidManager(application)
+    private val beaconPreferences = BeaconPreferences(application)
     private val _uiState = MutableStateFlow(
         RegisterBeaconUiState(
             uuid = deviceUuidManager.getDeviceUuid()
@@ -76,14 +79,86 @@ class RegisterBeaconViewModel(application: Application) : AndroidViewModel(appli
     }
 
     init {
-        // Register broadcast receiver with NOT_EXPORTED flag
-        ContextCompat.registerReceiver(
-            application,
-            statusReceiver,
-            IntentFilter("com.iiitl.locateme.BEACON_STATUS"),
-            ContextCompat.RECEIVER_NOT_EXPORTED
-        )
+        viewModelScope.launch {
+            // Load saved state
+            beaconPreferences.beaconState.collect { savedState ->
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        isTransmitting = savedState.isTransmitting,
+                        uuid = savedState.uuid.ifEmpty { currentState.uuid },
+                        major = savedState.major,
+                        minor = savedState.minor,
+                        latitude = savedState.latitude,
+                        longitude = savedState.longitude,
+                        isLocationValid = validateLocation(savedState.latitude, savedState.longitude)
+                    )
+                }
+            }
+        }
     }
+
+    fun startTransmitting() {
+        viewModelScope.launch {
+            val currentState = _uiState.value
+
+            if (!currentState.isLocationValid) {
+                _uiState.update { it.copy(error = "Please enter valid location") }
+                return@launch
+            }
+
+            try {
+                _uiState.update { it.copy(transmissionStatus = "Starting beacon...") }
+
+                val serviceIntent = Intent(getApplication(), BeaconTransmitterService::class.java).apply {
+                    putExtra("uuid", currentState.uuid)
+                    putExtra("major", currentState.major)
+                    putExtra("minor", currentState.minor)
+                    putExtra("latitude", currentState.latitude.toDoubleOrNull() ?: 0.0)
+                    putExtra("longitude", currentState.longitude.toDoubleOrNull() ?: 0.0)
+                }
+
+                // Save state before starting service
+                beaconPreferences.updateBeaconState(
+                    BeaconState(
+                        isTransmitting = true,
+                        uuid = currentState.uuid,
+                        major = currentState.major,
+                        minor = currentState.minor,
+                        latitude = currentState.latitude,
+                        longitude = currentState.longitude
+                    )
+                )
+
+                getApplication<Application>().startForegroundService(serviceIntent)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(
+                    isTransmitting = false,
+                    error = "Error starting beacon: ${e.message}"
+                )}
+                beaconPreferences.updateBeaconState(
+                    BeaconState(isTransmitting = false)
+                )
+            }
+        }
+    }
+
+    fun stopTransmitting() {
+        viewModelScope.launch {
+            try {
+                getApplication<Application>().stopService(
+                    Intent(getApplication(), BeaconTransmitterService::class.java)
+                )
+                beaconPreferences.updateBeaconState(
+                    BeaconState(isTransmitting = false)
+                )
+            } catch (e: Exception) {
+                _uiState.update { it.copy(
+                    error = "Error stopping beacon service: ${e.message}"
+                )}
+            }
+        }
+    }
+
 
     fun setPermissionLauncher(launcher: ActivityResultLauncher<Array<String>>) {
         permissionsManager = PermissionsManager(
@@ -158,48 +233,6 @@ class RegisterBeaconViewModel(application: Application) : AndroidViewModel(appli
 
     private fun validateLocation(latitude: String, longitude: String): Boolean {
         return latitude.isNotEmpty() && longitude.isNotEmpty()
-    }
-
-    fun startTransmitting() {
-        viewModelScope.launch {
-            val currentState = _uiState.value
-
-            if (!currentState.isLocationValid) {
-                _uiState.update { it.copy(error = "Please enter valid location") }
-                return@launch
-            }
-
-            try {
-                _uiState.update { it.copy(transmissionStatus = "Starting beacon...") }
-
-                val serviceIntent = Intent(getApplication(), BeaconTransmitterService::class.java).apply {
-                    putExtra("uuid", currentState.uuid)
-                    putExtra("major", currentState.major)
-                    putExtra("minor", currentState.minor)
-                    putExtra("latitude", currentState.latitude.toDoubleOrNull() ?: 0.0)
-                    putExtra("longitude", currentState.longitude.toDoubleOrNull() ?: 0.0)
-                }
-
-                getApplication<Application>().startForegroundService(serviceIntent)
-            } catch (e: Exception) {
-                _uiState.update { it.copy(
-                    isTransmitting = false,
-                    error = "Error starting beacon service: ${e.message}"
-                )}
-            }
-        }
-    }
-
-    fun stopTransmitting() {
-        try {
-            getApplication<Application>().stopService(
-                Intent(getApplication(), BeaconTransmitterService::class.java)
-            )
-        } catch (e: Exception) {
-            _uiState.update { it.copy(
-                error = "Error stopping beacon service: ${e.message}"
-            )}
-        }
     }
 
     override fun onCleared() {

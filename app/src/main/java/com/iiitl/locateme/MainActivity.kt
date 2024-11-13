@@ -26,7 +26,6 @@ import com.iiitl.locateme.viewmodels.LocateMeViewModel
 import com.iiitl.locateme.viewmodels.RegisterBeaconViewModel
 import androidx.compose.material3.*
 
-
 class MainActivity : ComponentActivity() {
     private val TAG = "MainActivity"
     private lateinit var permissionLauncher: ActivityResultLauncher<Array<String>>
@@ -47,7 +46,6 @@ class MainActivity : ComponentActivity() {
 
             val allGranted = permissions.all { it.value }
             if (allGranted) {
-                // For Android 10+ (Q), request background location separately
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     requestBackgroundLocation()
                 } else {
@@ -77,35 +75,15 @@ class MainActivity : ComponentActivity() {
                         registerViewModel = registerViewModel
                     )
 
-                    // Background Permission Dialog
                     if (showBackgroundPermissionDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showBackgroundPermissionDialog = false },
-                            title = { Text("Background Location Required") },
-                            text = { Text("This app needs background location access to detect beacons in the background.") },
-                            confirmButton = {
-                                TextButton(
-                                    onClick = {
-                                        showBackgroundPermissionDialog = false
-                                        ActivityCompat.requestPermissions(
-                                            this@MainActivity,
-                                            arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
-                                            BACKGROUND_LOCATION_PERMISSION_CODE
-                                        )
-                                    }
-                                ) {
-                                    Text("Grant")
-                                }
+                        BackgroundLocationPermissionDialog(
+                            onConfirm = {
+                                showBackgroundPermissionDialog = false
+                                requestBackgroundLocationPermission()
                             },
-                            dismissButton = {
-                                TextButton(
-                                    onClick = {
-                                        showBackgroundPermissionDialog = false
-                                        handlePermissionsDenied()
-                                    }
-                                ) {
-                                    Text("Deny")
-                                }
+                            onDismiss = {
+                                showBackgroundPermissionDialog = false
+                                handlePermissionsDenied()
                             }
                         )
                     }
@@ -122,13 +100,45 @@ class MainActivity : ComponentActivity() {
                 )) {
                 showBackgroundPermissionDialog = true
             } else {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
-                    BACKGROUND_LOCATION_PERMISSION_CODE
-                )
+                requestBackgroundLocationPermission()
             }
         }
+    }
+
+    private fun requestBackgroundLocationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
+                BACKGROUND_LOCATION_PERMISSION_CODE
+            )
+        }
+    }
+
+    @Composable
+    private fun BackgroundLocationPermissionDialog(
+        onConfirm: () -> Unit,
+        onDismiss: () -> Unit
+    ) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = {
+                Text("Background Location Required")
+            },
+            text = {
+                Text("This app needs background location access to detect beacons in the background.")
+            },
+            confirmButton = {
+                TextButton(onClick = onConfirm) {
+                    Text("Grant")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Deny")
+                }
+            }
+        )
     }
 
     override fun onRequestPermissionsResult(
