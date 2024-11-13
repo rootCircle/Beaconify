@@ -6,14 +6,11 @@ import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.iiitl.locateme.utils.PermissionsManager
 import com.iiitl.locateme.utils.beacon.BeaconData
 import com.iiitl.locateme.utils.location.LocationManager
+import com.iiitl.locateme.utils.PermissionsManager
 import com.iiitl.locateme.utils.positioning.Position
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class LocateMeUiState(
@@ -27,12 +24,11 @@ data class LocateMeUiState(
 
 class LocateMeViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "LocateMeViewModel"
-
-    private var permissionsManager: PermissionsManager? = null
-
     private val locationManager = LocationManager(application)
     private val _uiState = MutableStateFlow(LocateMeUiState())
     val uiState: StateFlow<LocateMeUiState> = _uiState.asStateFlow()
+
+    private var permissionsManager: PermissionsManager? = null
 
     init {
         // Observe location updates
@@ -48,6 +44,7 @@ class LocateMeViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
         }
+        checkInitialPermissions()
     }
 
     fun setPermissionLauncher(launcher: ActivityResultLauncher<Array<String>>) {
@@ -86,11 +83,19 @@ class LocateMeViewModel(application: Application) : AndroidViewModel(application
             permissionsDenied = true,
             error = "Permissions required for beacon scanning"
         )}
+        stopScanning()
     }
 
     fun startScanning() {
         viewModelScope.launch {
             try {
+                if (!uiState.value.hasPermissions) {
+                    _uiState.update { it.copy(
+                        error = "Required permissions not granted"
+                    )}
+                    return@launch
+                }
+
                 _uiState.update { it.copy(isScanning = true, error = null) }
                 locationManager.startLocationUpdates()
             } catch (e: Exception) {
@@ -115,9 +120,9 @@ class LocateMeViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-
     override fun onCleared() {
         super.onCleared()
         stopScanning()
+        locationManager.cleanup()
     }
 }

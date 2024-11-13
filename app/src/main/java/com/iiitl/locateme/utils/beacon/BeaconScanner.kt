@@ -6,6 +6,7 @@ import org.altbeacon.beacon.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.CopyOnWriteArrayList
 
 data class BeaconData(
     val uuid: String,
@@ -18,15 +19,23 @@ data class BeaconData(
     val timestamp: Long = System.currentTimeMillis()
 )
 
-class BeaconScanner(private val context: Context) {
+class BeaconScanner(private val context: Context) : BeaconConsumer {
     private val TAG = "BeaconScanner"
-
     private val beaconManager: BeaconManager = BeaconManager.getInstanceForApplication(context)
     private val _scannedBeacons = MutableStateFlow<List<BeaconData>>(emptyList())
     val scannedBeacons: StateFlow<List<BeaconData>> = _scannedBeacons.asStateFlow()
 
+    private var isBindingInProgress = false
+    private var isServiceBound = false
+    private val pendingOperations = CopyOnWriteArrayList<() -> Unit>()
+
     init {
+        setupBeaconManager()
+    }
+
+    private fun setupBeaconManager() {
         // Set up beacon parser for AltBeacon format
+        beaconManager.beaconParsers.clear()
         beaconManager.beaconParsers.add(
             BeaconParser().setBeaconLayout("m:2-3=beac,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25")
         )
@@ -34,11 +43,33 @@ class BeaconScanner(private val context: Context) {
         // Set up scanning periods
         beaconManager.foregroundScanPeriod = 1100L  // Scan for 1.1 seconds
         beaconManager.foregroundBetweenScanPeriod = 0L  // No delay between scans
+    }
 
-        // Set up beacon listener
+    override fun getApplicationContext(): Context = context.applicationContext
+
+    override fun bindService(p0: android.content.Intent?, p1: android.content.ServiceConnection, p2: Int): Boolean {
+        return true
+    }
+
+    override fun unbindService(p0: android.content.ServiceConnection) {
+        // Implementation required by interface
+    }
+
+    override fun onBeaconServiceConnect() {
+        Log.d(TAG, "Beacon service connected")
+        isServiceBound = true
+        isBindingInProgress = false
+
+        beaconManager.removeAllRangeNotifiers()
         beaconManager.addRangeNotifier { beacons, _ ->
             processBeacons(beacons)
         }
+
+        // Execute any pending operations
+        pendingOperations.forEach { operation ->
+            operation.invoke()
+        }
+        pendingOperations.clear()
     }
 
     private fun processBeacons(beacons: Collection<Beacon>) {
@@ -75,19 +106,49 @@ class BeaconScanner(private val context: Context) {
         }
     }
 
+    private fun ensureServiceBound(operation: () -> Unit) {
+        if (isServiceBound) {
+            operation.invoke()
+        } else {
+            pendingOperations.add(operation)
+            if (!isBindingInProgress) {
+                isBindingInProgress = true
+                beaconManager.bind(this)
+            }
+        }
+    }
+
     fun startScanning() {
-        try {
-            beaconManager.startRangingBeaconsInRegion(Region("myRangingUniqueId", null, null, null))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error starting beacon scanning: ${e.message}")
+        ensureServiceBound {
+            try {
+                Log.d(TAG, "Starting beacon scanning")
+                beaconManager.startRangingBeaconsInRegion(Region("myRangingUniqueId", null, null, null))
+            } catch (e: Exception) {
+                Log.e(TAG, "Error starting beacon scanning: ${e.message}")
+            }
         }
     }
 
     fun stopScanning() {
+        if (isServiceBound) {
+            try {
+                Log.d(TAG, "Stopping beacon scanning")
+                beaconManager.stopRangingBeaconsInRegion(Region("myRangingUniqueId", null, null, null))
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping beacon scanning: ${e.message}")
+            }
+        }
+    }
+
+    fun unbind() {
         try {
-            beaconManager.stopRangingBeaconsInRegion(Region("myRangingUniqueId", null, null, null))
+            stopScanning()
+            if (isServiceBound) {
+                beaconManager.unbind(this)
+                isServiceBound = false
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Error stopping beacon scanning: ${e.message}")
+            Log.e(TAG, "Error unbinding from beacon service: ${e.message}")
         }
     }
 }
