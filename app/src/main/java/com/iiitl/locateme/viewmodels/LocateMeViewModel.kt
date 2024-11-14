@@ -2,6 +2,12 @@
 package com.iiitl.locateme.viewmodels
 
 import android.app.Application
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.lifecycle.AndroidViewModel
@@ -19,7 +25,9 @@ data class LocateMeUiState(
     val isScanning: Boolean = false,
     val currentPosition: Position? = null,
     val nearbyBeacons: List<BeaconData> = emptyList(),
-    val error: String? = null
+    val error: String? = null,
+    val isBluetoothEnabled: Boolean = false,
+    val isLocationEnabled: Boolean = false
 )
 
 class LocateMeViewModel(application: Application) : AndroidViewModel(application) {
@@ -29,6 +37,26 @@ class LocateMeViewModel(application: Application) : AndroidViewModel(application
     val uiState: StateFlow<LocateMeUiState> = _uiState.asStateFlow()
 
     private var permissionsManager: PermissionsManager? = null
+
+    // Add broadcast receiver for Bluetooth state changes
+    private val bluetoothReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                    when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
+                        BluetoothAdapter.STATE_OFF -> {
+                            if (uiState.value.isScanning) {
+                                stopScanning()
+                                _uiState.update { it.copy(
+                                    error = "Bluetooth was turned off. Scanning stopped."
+                                )}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     init {
         // Observe location updates
@@ -43,8 +71,14 @@ class LocateMeViewModel(application: Application) : AndroidViewModel(application
                         )
                     }
                 }
+
         }
         checkInitialPermissions()
+        getApplication<Application>().registerReceiver(
+            bluetoothReceiver,
+            IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        )
+
     }
 
     fun setPermissionLauncher(launcher: ActivityResultLauncher<Array<String>>) {
@@ -86,12 +120,39 @@ class LocateMeViewModel(application: Application) : AndroidViewModel(application
         stopScanning()
     }
 
+    private fun checkBluetoothEnabled(): Boolean {
+        val bluetoothManager = getApplication<Application>().getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        return bluetoothManager.adapter?.isEnabled == true
+    }
+
+    private fun checkLocationEnabled(): Boolean {
+        val locationManager = getApplication<Application>().getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+        return locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) ||
+                locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
+    }
+
     fun startScanning() {
         viewModelScope.launch {
             try {
                 if (!uiState.value.hasPermissions) {
                     _uiState.update { it.copy(
                         error = "Required permissions not granted"
+                    )}
+                    return@launch
+                }
+
+                // Check Bluetooth
+                if (!checkBluetoothEnabled()) {
+                    _uiState.update { it.copy(
+                        error = "Please enable Bluetooth to scan for beacons"
+                    )}
+                    return@launch
+                }
+
+                // Check Location
+                if (!checkLocationEnabled()) {
+                    _uiState.update { it.copy(
+                        error = "Please enable Location services to scan for beacons"
                     )}
                     return@launch
                 }
@@ -107,6 +168,8 @@ class LocateMeViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+
+
     fun stopScanning() {
         viewModelScope.launch {
             try {
@@ -121,6 +184,12 @@ class LocateMeViewModel(application: Application) : AndroidViewModel(application
     }
 
     override fun onCleared() {
+        try {
+            getApplication<Application>().unregisterReceiver(bluetoothReceiver)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering bluetooth receiver: ${e.message}")
+        }
+
         super.onCleared()
         stopScanning()
         locationManager.cleanup()

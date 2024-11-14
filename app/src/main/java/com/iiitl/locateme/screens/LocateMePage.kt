@@ -1,6 +1,10 @@
 // screens/LocateMeScreen.kt
 package com.iiitl.locateme.screens
 
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,12 +15,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.iiitl.locateme.utils.beacon.BeaconData
 import com.iiitl.locateme.utils.positioning.Position
+import com.iiitl.locateme.viewmodels.LocateMeUiState
 import com.iiitl.locateme.viewmodels.LocateMeViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -26,6 +32,14 @@ fun LocateMeScreen(
     viewModel: LocateMeViewModel
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { error ->
+            Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+        }
+    }
+
 
     Column(
         modifier = Modifier
@@ -46,6 +60,8 @@ fun LocateMeScreen(
             )
         } else {
             LocationContent(
+                uiState = uiState,
+                context = context,
                 isScanning = uiState.isScanning,
                 currentPosition = uiState.currentPosition,
                 nearbyBeacons = uiState.nearbyBeacons,
@@ -59,6 +75,8 @@ fun LocateMeScreen(
 
 @Composable
 private fun LocationContent(
+    uiState: LocateMeUiState,
+    context: Context,
     isScanning: Boolean,
     currentPosition: Position?,
     nearbyBeacons: List<BeaconData>,
@@ -141,6 +159,33 @@ private fun LocationContent(
                 )
             ) {
                 Text(if (isScanning) "Stop Scanning" else "Start Scanning")
+            }
+        }
+
+        if (!uiState.isScanning && uiState.error != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Button(
+                    onClick = {
+                        context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                    }
+                ) {
+                    Text("Open Bluetooth Settings")
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                Button(
+                    onClick = {
+                        context.startActivity(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                    }
+                ) {
+                    Text("Open Location Settings")
+                }
             }
         }
 

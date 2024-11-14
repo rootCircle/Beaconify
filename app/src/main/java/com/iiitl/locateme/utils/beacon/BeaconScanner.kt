@@ -6,9 +6,12 @@ import com.iiitl.locateme.network.BeaconApiService
 import com.iiitl.locateme.network.models.VirtualBeacon
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.altbeacon.beacon.*
 import java.util.concurrent.CopyOnWriteArrayList
@@ -36,9 +39,36 @@ class BeaconScanner(private val context: Context) : BeaconConsumer {
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
     private val knownBeacons = mutableMapOf<String, VirtualBeacon>()
 
+    private val beaconCache = mutableMapOf<String, BeaconData>()
+    private val beaconExpirationTime = 5000L // 10 seconds timeout
+    private var cleanupJob: Job? = null
+
     init {
         setupBeaconManager()
     }
+
+    private fun startCleanupTimer() {
+        cleanupJob?.cancel()
+        cleanupJob = coroutineScope.launch {
+            while (isActive) {
+                cleanExpiredBeacons()
+                delay(1000) // Check every second
+            }
+        }
+    }
+
+    private fun cleanExpiredBeacons() {
+        val currentTime = System.currentTimeMillis()
+        val expiredBeacons = beaconCache.entries
+            .filter { currentTime - it.value.timestamp > beaconExpirationTime }
+            .map { it.key }
+
+        if (expiredBeacons.isNotEmpty()) {
+            expiredBeacons.forEach { beaconCache.remove(it) }
+            _scannedBeacons.value = beaconCache.values.toList()
+        }
+    }
+
 
     private fun setupBeaconManager() {
         // Set up beacon parser for AltBeacon format
@@ -61,7 +91,6 @@ class BeaconScanner(private val context: Context) : BeaconConsumer {
     override fun unbindService(p0: android.content.ServiceConnection) {
         // Implementation required by interface
     }
-
     override fun onBeaconServiceConnect() {
         Log.d(TAG, "Beacon service connected")
         isServiceBound = true
@@ -81,29 +110,37 @@ class BeaconScanner(private val context: Context) : BeaconConsumer {
 
     private fun processBeacons(beacons: Collection<Beacon>) {
         try {
-            val beaconDataList = beacons.mapNotNull { beacon ->
+            val currentTime = System.currentTimeMillis()
+
+            beacons.forEach { beacon ->
                 val uuid = beacon.id1.toString()
                 val major = beacon.id2.toString()
                 val minor = beacon.id3.toString()
+                val key = getBeaconKey(uuid, major, minor)
 
                 // Check if this is a known beacon
-                knownBeacons[getBeaconKey(uuid, major, minor)]?.let { virtualBeacon ->
-                    BeaconData(
+                knownBeacons[key]?.let { virtualBeacon ->
+                    val beaconData = BeaconData(
                         uuid = uuid,
                         major = major,
                         minor = minor,
                         rssi = beacon.rssi,
                         distance = beacon.distance,
                         latitude = virtualBeacon.latitude,
-                        longitude = virtualBeacon.longitude
+                        longitude = virtualBeacon.longitude,
+                        timestamp = currentTime
                     )
+                    beaconCache[key] = beaconData
                 }
             }
-            _scannedBeacons.value = beaconDataList
+
+            // Emit all cached beacons
+            _scannedBeacons.value = beaconCache.values.toList()
         } catch (e: Exception) {
             Log.e(TAG, "Error processing beacons: ${e.message}")
         }
     }
+
 
     private fun getBeaconKey(uuid: String, major: String, minor: String): String {
         return "$uuid:$major:$minor"
@@ -146,14 +183,20 @@ class BeaconScanner(private val context: Context) : BeaconConsumer {
                 updateKnownBeacons()
                 beaconManager.bind(this@BeaconScanner)
                 beaconManager.startRangingBeaconsInRegion(Region("myRangingUniqueId", null, null, null))
+                startCleanupTimer()
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting beacon scanning: ${e.message}")
             }
         }
     }
 
+
     fun stopScanning() {
         try {
+            cleanupJob?.cancel()
+            cleanupJob = null
+            beaconCache.clear()
+            _scannedBeacons.value = emptyList()
             beaconManager.stopRangingBeaconsInRegion(Region("myRangingUniqueId", null, null, null))
             if (isServiceBound) {
                 beaconManager.unbind(this)
@@ -163,6 +206,9 @@ class BeaconScanner(private val context: Context) : BeaconConsumer {
             Log.e(TAG, "Error stopping beacon scanning: ${e.message}")
         }
     }
+
+
+
 
     fun unbind() {
         try {
