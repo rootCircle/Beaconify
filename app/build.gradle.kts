@@ -41,6 +41,9 @@ android {
 
 dependencies {
     implementation(libs.android.beacon.library)
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation(libs.converter.gson)
+    implementation(libs.gson)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

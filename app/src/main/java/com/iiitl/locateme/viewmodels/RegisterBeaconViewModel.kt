@@ -2,6 +2,7 @@
 package com.iiitl.locateme.viewmodels
 
 import android.app.Application
+import android.bluetooth.BluetoothAdapter
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -35,7 +36,8 @@ data class RegisterBeaconUiState(
     val longitude: String = "",
     val isLocationValid: Boolean = false,
     val transmissionStatus: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val isBluetoothEnabled: Boolean = false
 )
 
 class RegisterBeaconViewModel(application: Application) : AndroidViewModel(application) {
@@ -94,8 +96,29 @@ class RegisterBeaconViewModel(application: Application) : AndroidViewModel(appli
                     )
                 }
             }
+            // Add Bluetooth state monitoring
+            monitorBluetoothState()
         }
     }
+
+    private fun monitorBluetoothState() {
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        getApplication<Application>().registerReceiver(object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
+                    BluetoothAdapter.STATE_OFF -> {
+                        if (uiState.value.isTransmitting) {
+                            stopTransmitting()
+                            _uiState.update { it.copy(
+                                error = "Bluetooth was turned off. Beacon transmission stopped."
+                            )}
+                        }
+                    }
+                }
+            }
+        }, filter)
+    }
+
 
     fun startTransmitting() {
         viewModelScope.launch {

@@ -14,6 +14,15 @@ import androidx.core.content.ContextCompat
 import com.iiitl.locateme.MainActivity
 import org.altbeacon.beacon.*
 import android.util.Log
+import com.iiitl.locateme.network.BeaconApiService
+import com.iiitl.locateme.network.models.VirtualBeacon
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class BeaconTransmitterService : Service() {
     companion object {
@@ -24,6 +33,9 @@ class BeaconTransmitterService : Service() {
     }
 
     private var beaconTransmitter: BeaconTransmitter? = null
+    private val coroutineScope = CoroutineScope(Dispatchers.Default + Job())
+    private var currentBeacon: VirtualBeacon? = null
+    private val serviceJob = SupervisorJob()
 
     private fun checkPermissions(): Boolean {
         val requiredPermissions = mutableListOf(
@@ -72,7 +84,26 @@ class BeaconTransmitterService : Service() {
         // Get beacon data from intent
         intent?.let { startIntent ->
             try {
-                startBeaconTransmission(startIntent)
+                val uuid = startIntent.getStringExtra("uuid") ?: return@let
+                val major = startIntent.getStringExtra("major") ?: return@let
+                val minor = startIntent.getStringExtra("minor") ?: return@let
+                val latitude = startIntent.getDoubleExtra("latitude", 0.0)
+                val longitude = startIntent.getDoubleExtra("longitude", 0.0)
+
+
+                currentBeacon = VirtualBeacon(
+                    uuid = uuid,
+                    major = major,
+                    minor = minor,
+                    latitude = latitude,
+                    longitude = longitude
+                )
+
+                coroutineScope.launch {
+                    registerBeaconWithBackend(currentBeacon!!)
+                }
+
+                startBeaconTransmission(uuid, major, minor)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting beacon transmission: ${e.message}")
@@ -84,16 +115,7 @@ class BeaconTransmitterService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startBeaconTransmission(startIntent: Intent) {
-        val uuid =
-            startIntent.getStringExtra("uuid") ?: throw IllegalArgumentException("UUID is required")
-        val major = startIntent.getStringExtra("major")
-            ?: throw IllegalArgumentException("Major is required")
-        val minor = startIntent.getStringExtra("minor")
-            ?: throw IllegalArgumentException("Minor is required")
-        val latitude = startIntent.getDoubleExtra("latitude", 0.0)
-        val longitude = startIntent.getDoubleExtra("longitude", 0.0)
-
+    private fun startBeaconTransmission(uuid: String, major: String, minor: String) {
         // Check transmission support
         val transmissionSupport = BeaconTransmitter.checkTransmissionSupported(this)
         if (transmissionSupport != BeaconTransmitter.SUPPORTED) {
@@ -107,12 +129,7 @@ class BeaconTransmitterService : Service() {
             .setId3(minor)
             .setManufacturer(0x0118)
             .setTxPower(-59)
-            .setDataFields(
-                listOf(
-                    latitude.toBits(),
-                    longitude.toBits()
-                )
-            )
+            .setDataFields(listOf(1L))
             .build()
 
         // Create beacon parser
@@ -128,8 +145,13 @@ class BeaconTransmitterService : Service() {
                 if (!transmitter.isStarted) {
                     Log.d(TAG, "Starting beacon transmission with UUID: $uuid")
                     transmitter.startAdvertising(beacon)
-                    Log.d(TAG, "Beacon transmission started successfully")
+                    Log.d(TAG, "Started beacon transmission")
                     broadcastStatus("SUCCESS")
+
+                    // Register with backend after successful transmission start
+                    coroutineScope.launch(serviceJob) {
+                        registerBeaconWithBackend(currentBeacon!!)
+                    }
                 } else {
                     Log.w(TAG, "Beacon transmission already active")
                 }
@@ -138,6 +160,25 @@ class BeaconTransmitterService : Service() {
                 broadcastStatus("ERROR", "Permission denied: ${e.message}")
                 stopSelf()
             }
+        }
+    }
+
+    private suspend fun registerBeaconWithBackend(beacon: VirtualBeacon) {
+        try {
+            withContext(serviceJob) {
+                BeaconApiService.registerBeacon(beacon)
+                    .onSuccess {
+                        Log.d(TAG, "Successfully registered beacon with backend")
+                        broadcastStatus("SUCCESS")
+                    }
+                    .onFailure { error ->
+                        Log.e(TAG, "Failed to register beacon with backend: ${error.message}")
+                        broadcastStatus("ERROR", "Failed to register beacon: ${error.message}")
+                    }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering beacon with backend: ${e.message}")
+            broadcastStatus("ERROR", "Error registering beacon: ${e.message}")
         }
     }
 
@@ -208,28 +249,51 @@ class BeaconTransmitterService : Service() {
 
     override fun onDestroy() {
         try {
+            currentBeacon?.let { beacon ->
+                // Launch a new coroutine for cleanup
+                CoroutineScope(Dispatchers.Default).launch {
+                    try {
+                        BeaconApiService.deactivateBeacon(beacon.uuid, beacon.major, beacon.minor)
+                            .onSuccess {
+                                Log.d(TAG, "Successfully deactivated beacon in backend")
+                            }
+                            .onFailure { error ->
+                                Log.e(TAG, "Failed to deactivate beacon in backend: ${error.message}")
+                            }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error deactivating beacon in backend: ${e.message}")
+                    }
+                }
+            }
+
             beaconTransmitter?.let { transmitter ->
                 if (transmitter.isStarted) {
                     transmitter.stopAdvertising()
-                    Log.d(TAG, "Beacon transmission stopped")
+                    Log.d(TAG, "Stopped beacon transmission")
                 }
             }
+
             broadcastStatus("STOPPED")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping beacon transmission: ${e.message}")
+            broadcastStatus("ERROR", "Error stopping beacon: ${e.message}")
         } finally {
-            super.onDestroy()
+            // Cancel all coroutines
+            serviceJob.cancel()
+            coroutineScope.cancel()
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
             } else {
                 @Suppress("DEPRECATION")
                 stopForeground(true)
             }
+            super.onDestroy()
         }
     }
 
+
+
     override fun onBind(intent: Intent?): IBinder? = null
-
-
 
 }
