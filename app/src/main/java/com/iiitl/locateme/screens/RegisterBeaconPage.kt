@@ -15,6 +15,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import com.iiitl.locateme.utils.PermissionsManager
@@ -111,7 +112,7 @@ fun RegisterBeaconScreen(
                 onLongitudeChanged = viewModel::updateLongitude,
                 onMajorChanged = viewModel::updateMajor,
                 onMinorChanged = viewModel::updateMinor,
-                onStartTransmitting = viewModel::startTransmitting,
+                onStartTransmitting = { (viewModel::startTransmitting)(context) },
                 onStopTransmitting = viewModel::stopTransmitting
             )
         }

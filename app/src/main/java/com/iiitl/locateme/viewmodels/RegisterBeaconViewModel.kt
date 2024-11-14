@@ -3,11 +3,14 @@ package com.iiitl.locateme.viewmodels
 
 import android.app.Application
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Context.BLUETOOTH_SERVICE
 import android.content.Intent
 import android.content.IntentFilter
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
@@ -37,7 +40,8 @@ data class RegisterBeaconUiState(
     val isLocationValid: Boolean = false,
     val transmissionStatus: String? = null,
     val error: String? = null,
-    val isBluetoothEnabled: Boolean = false
+    var isBluetoothEnabled: Boolean = false,
+    val showBluetoothDialog: Boolean = false
 )
 
 class RegisterBeaconViewModel(application: Application) : AndroidViewModel(application) {
@@ -80,7 +84,53 @@ class RegisterBeaconViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
+    private val bluetoothReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                    when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
+                        BluetoothAdapter.STATE_ON -> {
+                            _uiState.update { it.copy(
+                                isBluetoothEnabled = true,
+                                showBluetoothDialog = false
+                            )}
+                        }
+                        BluetoothAdapter.STATE_OFF -> {
+                            _uiState.update { it.copy(
+                                isBluetoothEnabled = false,
+                                showBluetoothDialog = false
+                            )}
+                            if (uiState.value.isTransmitting) {
+                                stopTransmitting()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun checkBluetoothState() {
+        val bluetoothManager = getApplication<Application>().getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
+        val bluetoothAdapter = bluetoothManager.adapter
+
+        if (bluetoothAdapter == null) {
+            _uiState.update {
+                it.copy(
+                    error = "Bluetooth is not supported on this device",
+                    isBluetoothEnabled = false
+                )
+            }
+            return
+        }
+
+        _uiState.update { it.copy(isBluetoothEnabled = bluetoothAdapter.isEnabled) }
+    }
+
+
     init {
+        checkBluetoothState()
+        monitorBluetoothState()
         viewModelScope.launch {
             // Load saved state
             beaconPreferences.beaconState.collect { savedState ->
@@ -96,8 +146,7 @@ class RegisterBeaconViewModel(application: Application) : AndroidViewModel(appli
                     )
                 }
             }
-            // Add Bluetooth state monitoring
-            monitorBluetoothState()
+
         }
     }
 
@@ -120,7 +169,21 @@ class RegisterBeaconViewModel(application: Application) : AndroidViewModel(appli
     }
 
 
-    fun startTransmitting() {
+    fun startTransmitting(context: Context) {
+        val bluetoothManager = getApplication<Application>().getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
+        val bluetoothAdapter = bluetoothManager.adapter
+
+        if (bluetoothAdapter == null) {
+            _uiState.update { it.copy(error = "Bluetooth is not supported on this device") }
+            return
+        }
+
+        if (!bluetoothAdapter.isEnabled) {
+            Toast.makeText(context, "Bluetooth is disabled", Toast.LENGTH_SHORT).show()
+            _uiState.update { it.copy(showBluetoothDialog = true) }
+            return
+        }
+
         viewModelScope.launch {
             val currentState = _uiState.value
 
@@ -164,6 +227,11 @@ class RegisterBeaconViewModel(application: Application) : AndroidViewModel(appli
             }
         }
     }
+
+    fun showBluetoothDialog(show: Boolean) {
+        _uiState.update { it.copy(showBluetoothDialog = show) }
+    }
+
 
     fun stopTransmitting() {
         viewModelScope.launch {
