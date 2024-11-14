@@ -3,9 +3,7 @@ package com.iiitl.locateme.utils.location
 
 import android.content.Context
 import android.util.Log
-import com.iiitl.locateme.utils.beacon.BeaconData
 import com.iiitl.locateme.utils.beacon.BeaconScanner
-import com.iiitl.locateme.utils.positioning.Position
 import com.iiitl.locateme.utils.positioning.PositionCalculator
 import com.iiitl.locateme.utils.positioning.PositionCalculatorFactory
 import kotlinx.coroutines.*
@@ -65,6 +63,5 @@ class LocationManager(
 
     fun cleanup() {
         coroutineScope.cancel()
-        beaconScanner.unbind()
     }
 }

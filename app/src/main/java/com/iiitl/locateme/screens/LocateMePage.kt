@@ -117,9 +117,9 @@ private fun LocationContent(
                 }
 
                 if (currentPosition != null) {
-                    Text("Latitude: ${String.format("%.6f", currentPosition.latitude)}")
-                    Text("Longitude: ${String.format("%.6f", currentPosition.longitude)}")
-                    Text("Accuracy: ${String.format("%.2f", currentPosition.accuracy)} meters")
+                    Text("Latitude: ${String.format(Locale.US, "%.6f", currentPosition.latitude)}")
+                    Text("Longitude: ${String.format(Locale.US, "%.6f", currentPosition.longitude)}")
+                    Text("Accuracy: ${String.format(Locale.US, "%.2f", currentPosition.accuracy)} meters")
                     Text(
                         text = "Last Updated: ${
                             SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -279,7 +279,7 @@ private fun BeaconItem(beacon: BeaconData) {
                 style = MaterialTheme.typography.bodySmall
             )
             Text(
-                text = "Distance: ${String.format("%.2f", beacon.distance)} m",
+                text = "Distance: ${String.format(Locale.US, "%.2f", beacon.distance)} m",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -288,8 +288,8 @@ private fun BeaconItem(beacon: BeaconData) {
                 style = MaterialTheme.typography.bodySmall
             )
             Text(
-                text = "Location: ${String.format("%.6f", beacon.latitude)}, " +
-                        "${String.format("%.6f", beacon.longitude)}",
+                text = "Location: ${String.format(Locale.US, "%.6f", beacon.latitude)}, " +
+                        String.format(Locale.US, "%.6f", beacon.longitude),
                 style = MaterialTheme.typography.bodySmall
             )
         }

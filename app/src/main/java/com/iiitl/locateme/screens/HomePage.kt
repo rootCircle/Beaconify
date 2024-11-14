@@ -123,13 +123,13 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Divider(modifier = Modifier.weight(1f))
+                    HorizontalDivider(modifier = Modifier.weight(1f))
                     Text(
                         text = "Available Actions",
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(horizontal = 8.dp)
                     )
-                    Divider(modifier = Modifier.weight(1f))
+                    HorizontalDivider(modifier = Modifier.weight(1f))
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
