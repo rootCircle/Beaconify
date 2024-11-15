@@ -6,11 +6,14 @@ import com.iiitl.locateme.network.BeaconApiService
 import com.iiitl.locateme.network.models.VirtualBeacon
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.altbeacon.beacon.*
+import java.util.concurrent.ConcurrentHashMap
 
 data class BeaconData(
     val uuid: String,
@@ -29,8 +32,8 @@ class BeaconScanner(private val context: Context) {
     private val _scannedBeacons = MutableStateFlow<List<BeaconData>>(emptyList())
     val scannedBeacons: StateFlow<List<BeaconData>> = _scannedBeacons.asStateFlow()
 
-    private val coroutineScope = CoroutineScope(Dispatchers.Default)
-    private val knownBeacons = mutableMapOf<String, VirtualBeacon>()
+    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val knownBeacons = ConcurrentHashMap<String, VirtualBeacon>()
 
     // Cache for maintaining beacon state
     private val beaconCache = mutableMapOf<String, BeaconData>()
@@ -149,6 +152,7 @@ class BeaconScanner(private val context: Context) {
     }
 
     fun cleanup() {
+        coroutineScope.cancel()
         stopScanning()
     }
 }

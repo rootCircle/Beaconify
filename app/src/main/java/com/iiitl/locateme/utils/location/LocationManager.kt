@@ -14,18 +14,26 @@ class LocationManager(
     calculatorType: PositionCalculatorFactory.CalculatorType = PositionCalculatorFactory.CalculatorType.WEIGHTED_CENTROID
 ) {
     private val TAG = "LocationManager"
-    private val beaconScanner = BeaconScanner(context)
+    private var beaconScanner: BeaconScanner? = null
     private val positionCalculator: PositionCalculator = PositionCalculatorFactory.getCalculator(calculatorType)
-    private val coroutineScope = CoroutineScope(Dispatchers.Default + Job())
+    private val coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     private val _locationUpdates = MutableStateFlow(LocationUpdate(null, emptyList()))
     val locationUpdates: StateFlow<LocationUpdate> = _locationUpdates.asStateFlow()
 
     init {
+
+        try {
+            beaconScanner = BeaconScanner(context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize beacon scanner: ${e.message}")
+            cleanup()
+        }
+
         // Observe beacon scanner updates
         coroutineScope.launch {
-            beaconScanner.scannedBeacons
-                .onEach { beacons ->
+            beaconScanner?.scannedBeacons
+                ?.onEach { beacons ->
                     try {
                         val position = positionCalculator.calculatePosition(beacons)
                         _locationUpdates.emit(LocationUpdate(
@@ -41,7 +49,7 @@ class LocationManager(
                         ))
                     }
                 }
-                .catch { e ->
+                ?.catch { e ->
                     Log.e(TAG, "Error in location updates: ${e.message}")
                     _locationUpdates.emit(LocationUpdate(
                         position = null,
@@ -49,19 +57,26 @@ class LocationManager(
                         error = "Error processing beacons: ${e.message}"
                     ))
                 }
-                .collect()
+                ?.collect()
         }
     }
 
     fun startLocationUpdates() {
-        beaconScanner.startScanning()
+        beaconScanner?.startScanning()
     }
 
     fun stopLocationUpdates() {
-        beaconScanner.stopScanning()
+        beaconScanner?.stopScanning()
     }
 
     fun cleanup() {
-        coroutineScope.cancel()
+        try {
+            beaconScanner?.cleanup()
+            beaconScanner = null
+            coroutineScope.cancel()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during cleanup: ${e.message}")
+        }
+
     }
 }

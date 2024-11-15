@@ -168,8 +168,37 @@ class RegisterBeaconViewModel(application: Application) : AndroidViewModel(appli
         }, filter)
     }
 
+    private fun validateInput(): Boolean {
+        val currentState = _uiState.value
+        val majorInt = currentState.major.toIntOrNull()
+        val minorInt = currentState.minor.toIntOrNull()
+
+        if (majorInt == null || minorInt == null ||
+            majorInt !in 0..65535 || minorInt !in 0..65535) {
+            _uiState.update { it.copy(
+                error = "Major and minor values must be between 0 and 65535"
+            )}
+            return false
+        }
+
+        val lat = currentState.latitude.toDoubleOrNull()
+        val lon = currentState.longitude.toDoubleOrNull()
+
+        if (lat == null || lon == null ||
+            lat !in -90.0..90.0 || lon !in -180.0..180.0) {
+            _uiState.update { it.copy(
+                error = "Invalid coordinates"
+            )}
+            return false
+        }
+
+        return true
+    }
+
+
 
     fun startTransmitting(context: Context) {
+        if (!validateInput()) return
         val bluetoothManager = getApplication<Application>().getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         val bluetoothAdapter = bluetoothManager.adapter
 
