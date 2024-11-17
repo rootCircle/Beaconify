@@ -169,24 +169,35 @@ private fun LocationContent(
                     .padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                Button(
-                    onClick = {
-                        context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
-                    }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 4.dp)
                 ) {
-                    Text("Open Bluetooth Settings")
+                    Button(
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                        }
+                    ) {
+                        Text("Open Bluetooth Settings")
+                    }
                 }
 
-                Spacer(Modifier.width(8.dp))
-
-                Button(
-                    onClick = {
-                        context.startActivity(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-                    }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 4.dp)
                 ) {
-                    Text("Open Location Settings")
+                    Button(
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                        }
+                    ) {
+                        Text("Open Location Settings")
+                    }
                 }
             }
+
         }
 
         if (isScanning) {
