@@ -41,10 +41,10 @@ android {
 
 dependencies {
     implementation(libs.android.beacon.library)
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation(libs.retrofit)
     implementation(libs.converter.gson)
     implementation(libs.gson)
-    implementation("com.github.haifengl:smile-core:2.6.0")
+    implementation(libs.smile.core)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

@@ -15,6 +15,8 @@ navigationRuntimeKtx = "2.8.3"
 navigationCompose = "2.8.3"
 appcompat = "1.7.0"
 datastoreCoreAndroid = "1.1.1"
+retrofit = "2.9.0"
+smileCore = "2.6.0"
 
 [libraries]
 android-beacon-library = { module = "org.altbeacon:android-beacon-library", version.ref = "androidBeaconLibrary" }
@@ -39,6 +41,8 @@ androidx-navigation-runtime-ktx = { group = "androidx.navigation", name = "navig
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 androidx-datastore-core-android = { group = "androidx.datastore", name = "datastore-core-android", version.ref = "datastoreCoreAndroid" }
+retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
+smile-core = { module = "com.github.haifengl:smile-core", version.ref = "smileCore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
