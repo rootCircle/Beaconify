@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "com.iiitl.locateme"
-        minSdk = 29
+        minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -44,7 +44,7 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation(libs.converter.gson)
     implementation(libs.gson)
-
+    implementation("com.github.haifengl:smile-core:2.6.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
