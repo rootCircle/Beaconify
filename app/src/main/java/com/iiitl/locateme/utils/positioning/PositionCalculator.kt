@@ -21,10 +21,10 @@ class IndoorPositioningCalculator : PositionCalculator {
     companion object {
 //        private const val TAG = "IndoorPositioning"
 //        private const val PATH_LOSS_EXPONENT = 1.45
-        private const val SMOOTHING_FACTOR = 0.5
-        private const val DAMPING_FACTOR = 0.6
-        private const val TOP_K_BEACONS = 4
-        private const val MIN_VALID_DISTANCE = 0.1
+        private const val SMOOTHING_FACTOR = 0.9
+        private const val DAMPING_FACTOR = 0.5
+        private const val TOP_K_BEACONS = 10
+        private const val MIN_VALID_DISTANCE = 0.001
         private const val MAX_VALID_DISTANCE = 1000.0
 //        private const val REFERENCE_RSSI = -59
 //        private const val MIN_BEACONS = 3

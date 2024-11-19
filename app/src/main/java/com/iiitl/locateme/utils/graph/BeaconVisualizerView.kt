@@ -71,8 +71,8 @@ class BeaconVisualizerView @JvmOverloads constructor(
 
             // If only one beacon, add a small offset to create valid bounds
             if (beacons.size == 1) {
-                val latOffset = 0.0001 // Approximately 10 meters
-                val lonOffset = 0.0001
+                val latOffset = 0.000005 // Approximately 10 meters
+                val lonOffset = 0.000005
                 minLat -= latOffset
                 maxLat += latOffset
                 minLon -= lonOffset
@@ -105,8 +105,8 @@ class BeaconVisualizerView @JvmOverloads constructor(
         }
 
         // Add padding to bounds
-        val latPadding = max((maxLat - minLat) * 0.1, 0.0001)
-        val lonPadding = max((maxLon - minLon) * 0.1, 0.0001)
+        val latPadding = max((maxLat - minLat) * 0.1, 0.000005)
+        val lonPadding = max((maxLon - minLon) * 0.1, 0.000005)
         minLat -= latPadding
         maxLat += latPadding
         minLon -= lonPadding

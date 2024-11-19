@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.*
 class LocationManager(
     context: Context,
     calculatorType: PositionCalculatorFactory.CalculatorType = PositionCalculatorFactory.CalculatorType.INDOOR_POSITIONING
+
+
 ) {
     private val TAG = "LocationManager"
     private var beaconScanner: BeaconScanner? = null
