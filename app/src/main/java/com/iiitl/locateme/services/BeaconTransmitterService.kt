@@ -16,6 +16,7 @@ import org.altbeacon.beacon.*
 import android.util.Log
 import com.iiitl.locateme.network.BeaconApiService
 import com.iiitl.locateme.network.models.VirtualBeacon
+import com.iiitl.locateme.utils.BeaconPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,13 +30,17 @@ class BeaconTransmitterService : Service() {
         private const val NOTIFICATION_ID = 123
         private const val CHANNEL_ID = "BeaconTransmitterChannel"
         private const val TAG = "BeaconTransmitterService"
-        const val ACTION_SHOW_REGISTER_SCREEN = "com.iiitl.locateme.SHOW_REGISTER_SCREEN"
+        const val ACTION_SHOW_REGISTER_SCREEN = "com.iiitl.locateme.SHOW_BEACON_SCREEN"
     }
 
     private var beaconTransmitter: BeaconTransmitter? = null
     private val coroutineScope = CoroutineScope(Dispatchers.Default + Job())
     private var currentBeacon: VirtualBeacon? = null
     private val serviceJob = SupervisorJob()
+    private val beaconPreferences by lazy {
+        BeaconPreferences.getInstance(applicationContext)
+    }
+
 
     private fun checkPermissions(): Boolean {
         val requiredPermissions = mutableListOf(
@@ -206,6 +211,8 @@ class BeaconTransmitterService : Service() {
         }
     }
 
+    // In BeaconTransmitterService.kt, update the createNotification() function:
+
     private fun createNotification(): Notification {
         // Create notification channel
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -226,7 +233,7 @@ class BeaconTransmitterService : Service() {
             action = ACTION_SHOW_REGISTER_SCREEN
         }
         val pendingIntent = PendingIntent.getActivity(
-            this,
+            applicationContext,
             0,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -237,6 +244,7 @@ class BeaconTransmitterService : Service() {
             .setContentText("Beacon is transmitting")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
+            .setAutoCancel(false)
             .setContentIntent(pendingIntent)
             .build()
     }

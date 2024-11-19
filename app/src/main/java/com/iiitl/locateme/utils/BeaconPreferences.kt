@@ -15,8 +15,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "beacon_prefs")
-
 data class BeaconState(
     val isTransmitting: Boolean = false,
     val uuid: String = "",
@@ -26,9 +24,9 @@ data class BeaconState(
     val longitude: String = ""
 )
 
-class BeaconPreferences(private val context: Context) {
-    private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "beacon_prefs")
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "beacon_prefs")
+
+class BeaconPreferences private constructor(private val context: Context) {
 
     companion object {
         private val IS_TRANSMITTING = booleanPreferencesKey("is_transmitting")
@@ -39,6 +37,17 @@ class BeaconPreferences(private val context: Context) {
         private val LONGITUDE = stringPreferencesKey("longitude")
         private val IS_SERVICE_RUNNING = booleanPreferencesKey("is_service_running")
         private val CURRENT_BEACON = stringPreferencesKey("current_beacon")
+
+        @Volatile
+        private var INSTANCE: BeaconPreferences? = null
+
+        fun getInstance(context: Context): BeaconPreferences {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: BeaconPreferences(context.applicationContext).also {
+                    INSTANCE = it
+                }
+            }
+        }
     }
 
     val beaconState: Flow<BeaconState> = context.dataStore.data.map { preferences ->
@@ -104,10 +113,10 @@ class BeaconPreferences(private val context: Context) {
             emit(null)
         }
 
-
     suspend fun clearBeaconState() {
         context.dataStore.edit { preferences ->
             preferences.clear()
         }
     }
 }
+

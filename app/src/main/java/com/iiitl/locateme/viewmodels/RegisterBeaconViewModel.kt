@@ -46,7 +46,8 @@ data class RegisterBeaconUiState(
 
 class RegisterBeaconViewModel(application: Application) : AndroidViewModel(application) {
     private val deviceUuidManager = DeviceUuidManager(application)
-    private val beaconPreferences = BeaconPreferences(application)
+    private val beaconPreferences = BeaconPreferences.getInstance(application)
+
     private val _uiState = MutableStateFlow(
         RegisterBeaconUiState(
             uuid = deviceUuidManager.getDeviceUuid()
