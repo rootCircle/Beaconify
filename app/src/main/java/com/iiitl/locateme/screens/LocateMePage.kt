@@ -26,6 +26,8 @@ import com.iiitl.locateme.viewmodels.LocateMeUiState
 import com.iiitl.locateme.viewmodels.LocateMeViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.ui.viewinterop.AndroidView
+import com.iiitl.locateme.utils.graph.BeaconVisualizerView
 
 @Composable
 fun LocateMeScreen(
@@ -39,7 +41,6 @@ fun LocateMeScreen(
             Toast.makeText(context, error, Toast.LENGTH_LONG).show()
         }
     }
-
 
     Column(
         modifier = Modifier
@@ -88,6 +89,35 @@ private fun LocationContent(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Beacon Visualization Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+                .padding(bottom = 16.dp)
+        ) {
+            AndroidView(
+                factory = { context ->
+                    BeaconVisualizerView(context).apply {
+                        updateData(
+                            latitude = currentPosition?.latitude,
+                            longitude = currentPosition?.longitude,
+                            accuracy = currentPosition?.accuracy,
+                            newBeacons = nearbyBeacons
+                        )
+                    }
+                },
+                update = { view ->
+                    view.updateData(
+                        latitude = currentPosition?.latitude,
+                        longitude = currentPosition?.longitude,
+                        accuracy = currentPosition?.accuracy,
+                        newBeacons = nearbyBeacons
+                    )
+                }
+            )
+        }
+
         // Current Position Card
         Card(
             modifier = Modifier
@@ -197,7 +227,6 @@ private fun LocationContent(
                     }
                 }
             }
-
         }
 
         if (isScanning) {
